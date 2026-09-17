@@ -155,6 +155,10 @@
       <label class="chk"><input type="checkbox" id="soAberto" checked> Só em aberto (sem data de entrega)</label>
       <label class="chk"><input type="checkbox" id="soCss"> Só CSS (exclui DISKTRANS)</label>
     </div>
+    <div id="lightBox" class="hide" style="margin-top:.7rem;border-top:1px dashed var(--linha);padding-top:.7rem">
+      <button id="btnLight" style="font:inherit;font-weight:700;border:0;background:var(--azul);color:#fff;border-radius:8px;padding:.5rem .9rem;cursor:pointer">⬇ Baixar base leve (para publicar no congelado)</button>
+      <span class="muted" id="lightInfo" style="margin-left:.5rem">gera um <b>base.csv</b> pequeno com só o necessário para o painel — é esse que você sobe no repositório <code>fup-congelado</code></span>
+    </div>
     <div id="statusInfo" class="muted hide" style="margin-top:.6rem">
       <b>Controle de entrega</b> = <code>status_romaneio</code> contendo “controle”. Valores na base:
       <div class="status-vals" id="statusVals"></div>
@@ -198,6 +202,7 @@ var BANDS=[
 function bandOf(d){for(var i=0;i<BANDS.length;i++){if(BANDS[i].test(d))return BANDS[i].k;}return "+30";}
 var rowsRaw=[], rowsCmp=null, viewGroup='total', rankSort='eq';
 var atendSort='vol';
+var csvHead=null;
 var BAND_W={emdia:0,"0-3":2,"3-6":5,"6-9":8,"9-15":12,"15-30":22,"+30":40};
 function agingScore(agg){var s=0;BANDS.forEach(function(b){s+=agg.bands[b.k].eq*BAND_W[b.k];});return s;}
 
@@ -566,6 +571,24 @@ function showStatusVals(){
   document.getElementById('statusInfo').classList.remove('hide');
 }
 
+// ---- Exportar "base leve" para publicar no congelado ----
+function toLatin1Bytes(str){var out=new Uint8Array(str.length);for(var i=0;i<str.length;i++){var c=str.charCodeAt(i);out[i]=c<256?c:63;}return out;}
+function exportLight(){
+  if(!rowsRaw.length){alert('Carregue uma base primeiro.');return;}
+  var head=csvHead||Object.keys(rowsRaw[0]);
+  var hoje=new Date();hoje.setHours(0,0,0,0);
+  var cutoff=new Date(hoje);cutoff.setDate(cutoff.getDate()-45); // mantém entregas recentes p/ comparativo
+  var keep=rowsRaw.filter(function(r){var de=parseDate(r.data_entrega);if(!de)return true;return de>=cutoff;});
+  var lines=[head.join(';')];
+  keep.forEach(function(r){lines.push(head.map(function(h){var v=r[h];return v==null?'':String(v);}).join(';'));});
+  var txt=lines.join('\r\n');
+  var blob=new Blob([toLatin1Bytes(txt)],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='base.csv';document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},3000);
+  var info=document.getElementById('lightInfo');
+  if(info)info.innerHTML="✅ Gerado <b>base.csv</b> com "+fmt(keep.length)+" linhas (de "+fmt(rowsRaw.length)+"). Suba esse arquivo no repositório <code>fup-congelado</code>.";
+}
 function loadInto(file,cb,errEl){
   var fr=new FileReader();
   fr.onload=function(){
@@ -574,7 +597,7 @@ function loadInto(file,cb,errEl){
       if(p.head.indexOf('prazo')<0||p.head.indexOf('status_romaneio')<0){
         errEl.textContent="CSV não reconhecido: faltam 'prazo' e/ou 'status_romaneio'. Colunas: "+p.head.join(", ");errEl.classList.remove('hide');return;
       }
-      errEl.classList.add('hide'); cb(p.rows);
+      errEl.classList.add('hide'); cb(p.rows,p.head);
     }catch(e){errEl.textContent="Erro ao ler: "+e.message;errEl.classList.remove('hide');}
   };
   fr.readAsText(file,'ISO-8859-1');
@@ -595,7 +618,7 @@ function loadInto(file,cb,errEl){
   }
 
   wireDrop('drop','file',function(f){
-    loadInto(f,function(rows){rowsRaw=rows;document.getElementById('drop').classList.add('ok');document.getElementById('dropLab').textContent="Base carregada ✓ ("+rows.length+" linhas) — trocar";showStatusVals();showCoverage();render();},err);
+    loadInto(f,function(rows,head){rowsRaw=rows;csvHead=head;document.getElementById('drop').classList.add('ok');document.getElementById('dropLab').textContent="Base carregada ✓ ("+rows.length+" linhas) — trocar";document.getElementById('lightBox').classList.remove('hide');showStatusVals();showCoverage();render();},err);
   });
   wireDrop('dropCmp','fileCmp',function(f){
     loadInto(f,function(rows){rowsCmp=rows;var dc=document.getElementById('dropCmp');dc.classList.add('ok');document.getElementById('dropCmpLab').textContent="Base de comparação ✓ ("+rows.length+" linhas)";document.getElementById('clrCmp').classList.remove('hide');if(rowsRaw.length)render();},err);
@@ -603,13 +626,15 @@ function loadInto(file,cb,errEl){
   document.getElementById('clrCmp').addEventListener('click',function(){rowsCmp=null;document.getElementById('dropCmp').classList.remove('ok');document.getElementById('dropCmpLab').textContent="Solte o CSV da base de outro dia";this.classList.add('hide');if(rowsRaw.length)render();});
 
   ['ref','soTroca','soAberto','soCss','refCmp'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){if(rowsRaw.length)render();});});
+  document.getElementById('btnLight').addEventListener('click',exportLight);
 
   // Retrato congelado: se existir um "base.csv" ao lado deste arquivo, carrega sozinho.
   fetch('base.csv',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(buf){
     var txt=new TextDecoder('iso-8859-1').decode(new Uint8Array(buf));
     var p=parseCSV(txt);
     if(p.head.indexOf('prazo')<0||p.head.indexOf('status_romaneio')<0)return;
-    rowsRaw=p.rows;
+    rowsRaw=p.rows; csvHead=p.head;
+    document.getElementById('lightBox').classList.remove('hide');
     var dp=document.getElementById('drop'); dp.classList.add('ok');
     document.getElementById('dropLab').textContent="Retrato carregado ✓ ("+p.rows.length+" linhas) — para trocar, solte outro CSV";
     document.getElementById('cabDt').setAttribute('data-frozen','1');
