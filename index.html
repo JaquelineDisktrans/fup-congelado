@@ -634,7 +634,7 @@ function loadInto(file,cb,errEl){
   document.getElementById('btnLight').addEventListener('click',exportLight);
 
   // Retrato congelado: se existir um "base.csv" ao lado deste arquivo, carrega sozinho.
-  fetch('base.csv',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(buf){
+  fetch('base.csv?ts='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(buf){
     var txt=new TextDecoder('iso-8859-1').decode(new Uint8Array(buf));
     var p=parseCSV(txt);
     if(p.head.indexOf('prazo')<0||p.head.indexOf('status_romaneio')<0)return;
