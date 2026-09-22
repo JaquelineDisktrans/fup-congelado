@@ -152,7 +152,7 @@
     <div class="row">
       <div class="fld"><label>Data de referência (hoje)</label><input type="date" id="ref"></div>
       <label class="chk"><input type="checkbox" id="soTroca" checked> Só trocas</label>
-      <label class="chk"><input type="checkbox" id="soAberto" checked> Só em aberto (sem data de entrega)</label>
+      <label class="chk"><input type="checkbox" id="soAberto" checked> Só em aberto</label>
       <label class="chk"><input type="checkbox" id="soCss"> Só CSS (exclui DISKTRANS)</label>
     </div>
     <div id="lightBox" class="hide" style="margin-top:.7rem;border-top:1px dashed var(--linha);padding-top:.7rem">
@@ -203,6 +203,11 @@ function bandOf(d){for(var i=0;i<BANDS.length;i++){if(BANDS[i].test(d))return BA
 var rowsRaw=[], rowsCmp=null, viewGroup='total', rankSort='eq';
 var atendSort='vol';
 var csvHead=null;
+var HAS_SL=false; // base tem coluna status_linha?
+function isEntregue(r){var s=((r.status_linha||"")+" "+(r.status_romaneio||"")).toLowerCase();return /encerr|finaliz/.test(s);}
+function isAberto(r){ // "em aberto" = status_linha "Aberta"
+  return /abert/i.test((r.status_linha||"").trim());
+}
 var BAND_W={emdia:0,"0-3":2,"3-6":5,"6-9":8,"9-15":12,"15-30":22,"+30":40};
 function agingScore(agg){var s=0;BANDS.forEach(function(b){s+=agg.bands[b.k].eq*BAND_W[b.k];});return s;}
 
@@ -228,7 +233,7 @@ function computeFor(rows,ref){
   var total=emptyAgg(),ce=emptyAgg(),rest=emptyAgg(),byConc={},used=0;
   rows.forEach(function(r){
     if(soTroca && !/troca/i.test(r.tipo_solicitacao||""))return;
-    if(soAberto && r.data_entrega && r.data_entrega.trim())return;
+    if(soAberto && !isAberto(r))return;
     var conc=(r.concessionaria||"").trim();
     if(soCss && /^DISKTRANS/i.test(conc))return;
     var d=busOverdue(parseDate(r.prazo),ref); if(d===null)return;
@@ -578,7 +583,7 @@ function exportLight(){
   var head=csvHead||Object.keys(rowsRaw[0]);
   var hoje=new Date();hoje.setHours(0,0,0,0);
   var cutoff=new Date(hoje);cutoff.setDate(cutoff.getDate()-45); // mantém entregas recentes p/ comparativo
-  var keep=rowsRaw.filter(function(r){var de=parseDate(r.data_entrega);if(!de)return true;return de>=cutoff;});
+  var keep=rowsRaw.filter(function(r){if(isAberto(r))return true;var de=parseDate(r.data_entrega);return de&&de>=cutoff;});
   var lines=[head.join(';')];
   keep.forEach(function(r){lines.push(head.map(function(h){var v=r[h];return v==null?'':String(v);}).join(';'));});
   var txt=lines.join('\r\n');
@@ -618,7 +623,7 @@ function loadInto(file,cb,errEl){
   }
 
   wireDrop('drop','file',function(f){
-    loadInto(f,function(rows,head){rowsRaw=rows;csvHead=head;document.getElementById('drop').classList.add('ok');document.getElementById('dropLab').textContent="Base carregada ✓ ("+rows.length+" linhas) — trocar";document.getElementById('lightBox').classList.remove('hide');showStatusVals();showCoverage();render();},err);
+    loadInto(f,function(rows,head){rowsRaw=rows;csvHead=head;HAS_SL=head.indexOf('status_linha')>=0;document.getElementById('drop').classList.add('ok');document.getElementById('dropLab').textContent="Base carregada ✓ ("+rows.length+" linhas) — trocar";document.getElementById('lightBox').classList.remove('hide');showStatusVals();showCoverage();render();},err);
   });
   wireDrop('dropCmp','fileCmp',function(f){
     loadInto(f,function(rows){rowsCmp=rows;var dc=document.getElementById('dropCmp');dc.classList.add('ok');document.getElementById('dropCmpLab').textContent="Base de comparação ✓ ("+rows.length+" linhas)";document.getElementById('clrCmp').classList.remove('hide');if(rowsRaw.length)render();},err);
@@ -633,7 +638,7 @@ function loadInto(file,cb,errEl){
     var txt=new TextDecoder('iso-8859-1').decode(new Uint8Array(buf));
     var p=parseCSV(txt);
     if(p.head.indexOf('prazo')<0||p.head.indexOf('status_romaneio')<0)return;
-    rowsRaw=p.rows; csvHead=p.head;
+    rowsRaw=p.rows; csvHead=p.head; HAS_SL=p.head.indexOf('status_linha')>=0;
     document.getElementById('lightBox').classList.remove('hide');
     var dp=document.getElementById('drop'); dp.classList.add('ok');
     document.getElementById('dropLab').textContent="Retrato carregado ✓ ("+p.rows.length+" linhas) — para trocar, solte outro CSV";
