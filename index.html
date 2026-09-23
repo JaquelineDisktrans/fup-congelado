@@ -151,7 +151,7 @@
     <div id="err" class="err hide"></div>
     <div class="row">
       <div class="fld"><label>Data de referência (hoje)</label><input type="date" id="ref"></div>
-      <label class="chk"><input type="checkbox" id="soTroca" checked> Só trocas</label>
+      <span class="muted" style="align-self:center">Considera apenas <b>trocas</b> (Troca e Troca de Modelo)</span>
       <label class="chk"><input type="checkbox" id="soAberto" checked> Só em aberto</label>
       <label class="chk"><input type="checkbox" id="soCss"> Só CSS (exclui DISKTRANS)</label>
     </div>
@@ -229,10 +229,10 @@ function emptyAgg(){var o={eq:0,ceEq:0,solSet:{},bands:{}};BANDS.forEach(functio
 function addTo(a,r,band){a.eq++;a.solSet[r.numero]=1;a.bands[band].eq++;a.bands[band].sol[r.numero]=1;}
 
 function computeFor(rows,ref){
-  var soAberto=document.getElementById('soAberto').checked, soCss=document.getElementById('soCss').checked, soTroca=document.getElementById('soTroca').checked;
+  var soAberto=document.getElementById('soAberto').checked, soCss=document.getElementById('soCss').checked;
   var total=emptyAgg(),ce=emptyAgg(),rest=emptyAgg(),byConc={},used=0;
   rows.forEach(function(r){
-    if(soTroca && !/troca/i.test(r.tipo_solicitacao||""))return;
+    if(!/troca/i.test(r.tipo_solicitacao||""))return;
     if(soAberto && !isAberto(r))return;
     var conc=(r.concessionaria||"").trim();
     if(soCss && /^DISKTRANS/i.test(conc))return;
@@ -247,10 +247,10 @@ function computeFor(rows,ref){
 }
 // reconstrói a posição de uma data passada a partir da MESMA base
 function computeAt(rows,at){
-  var soCss=document.getElementById('soCss').checked, soTroca=document.getElementById('soTroca').checked;
+  var soCss=document.getElementById('soCss').checked;
   var total=emptyAgg(),ce=emptyAgg(),rest=emptyAgg(),byConc={};
   rows.forEach(function(r){
-    if(soTroca && !/troca/i.test(r.tipo_solicitacao||""))return;
+    if(!/troca/i.test(r.tipo_solicitacao||""))return;
     var ds=parseDate(r.data_solic); if(ds && ds>at)return;        // ainda não existia
     var de=parseDate(r.data_entrega); if(de && de<=at)return;      // já tinha sido entregue
     var conc=(r.concessionaria||"").trim();
@@ -310,13 +310,13 @@ function rankTable(byConc){
 function isoOf(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');}
 function emptyAt(){var o={eq:0,onTime:0,sumAtr:0,bands:{}};BANDS.forEach(function(b){o.bands[b.k]=0;});return o;}
 function computeAtend(rows){
-  var soCss=document.getElementById('soCss').checked, soTroca=document.getElementById('soTroca').checked;
+  var soCss=document.getElementById('soCss').checked;
   var af=document.getElementById('atFrom'), atEl=document.getElementById('atTo');
   var atendFrom=(af&&af.value)?parseISO(af.value):null; if(atendFrom)atendFrom.setHours(0,0,0,0);
   var atendTo=(atEl&&atEl.value)?parseISO(atEl.value):null; if(atendTo)atendTo.setHours(0,0,0,0);
   var tot=emptyAt(), byConc={}, daily={}, deMin=null,deMax=null, foraPeriodo=0;
   rows.forEach(function(r){
-    if(soTroca && !/troca/i.test(r.tipo_solicitacao||""))return;
+    if(!/troca/i.test(r.tipo_solicitacao||""))return;
     var de=parseDate(r.data_entrega); if(!de)return;               // só o que foi entregue
     var conc=(r.concessionaria||"").trim(); if(soCss && /^DISKTRANS/i.test(conc))return;
     var pr=parseDate(r.prazo); if(!pr)return;
@@ -456,11 +456,11 @@ function cmpConcCard(C,R){
 
 // movimento item-a-item entre A e B (mesma base) — usa numero+item como identidade
 function movement(rows,A,B){
-  var soCss=document.getElementById('soCss').checked, soTroca=document.getElementById('soTroca').checked;
+  var soCss=document.getElementById('soCss').checked;
   var res={entregue:0,mudou:0,entrou:0,ficou:0,perBand:{}};
   BANDS.forEach(function(b){res.perBand[b.k]={out_ent:0,out_mov:0,in_ag:0,stay:0};});
   rows.forEach(function(r){
-    if(soTroca && !/troca/i.test(r.tipo_solicitacao||""))return;
+    if(!/troca/i.test(r.tipo_solicitacao||""))return;
     var conc=(r.concessionaria||"").trim(); if(soCss && /^DISKTRANS/i.test(conc))return;
     var pr=parseDate(r.prazo); if(!pr)return;
     var ds=parseDate(r.data_solic), de=parseDate(r.data_entrega);
@@ -630,7 +630,7 @@ function loadInto(file,cb,errEl){
   });
   document.getElementById('clrCmp').addEventListener('click',function(){rowsCmp=null;document.getElementById('dropCmp').classList.remove('ok');document.getElementById('dropCmpLab').textContent="Solte o CSV da base de outro dia";this.classList.add('hide');if(rowsRaw.length)render();});
 
-  ['ref','soTroca','soAberto','soCss','refCmp'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){if(rowsRaw.length)render();});});
+  ['ref','soAberto','soCss','refCmp'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){if(rowsRaw.length)render();});});
   document.getElementById('btnLight').addEventListener('click',exportLight);
 
   // Retrato congelado: se existir um "base.csv" ao lado deste arquivo, carrega sozinho.
